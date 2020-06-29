@@ -18,6 +18,20 @@ namespace ImageShaper
         public const string ProgramName = "Image Shaper";
         private ContextMenuStrip dataGrid_CM;
 
+        private enum SplitFrame : int
+        {
+            Specific = -1,
+            Begin = Specific - 3,
+            End = Specific - 2,
+            Half = Specific - 1,
+            Numberic = Specific,
+        }
+
+        private SplitFrame SplitStartFrame;
+        private SplitFrame SplitEndFrame;
+        private bool SplitWithShadow;
+        private bool TrimInputName;
+
         [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "ShowWindow")]
         private static extern int ShowWindow(IntPtr hWnd, uint Msg);
 
@@ -345,7 +359,12 @@ namespace ImageShaper
             else this.showHidePreviewToolStripMenuItem.Text = "Show Preview";
             ShowHidePreview();
             this.Activated += new EventHandler(Form_ImageShaper_Activated);
-        }
+
+            SplitStartFrame = SplitFrame.Begin;
+            SplitEndFrame = SplitFrame.End;
+            SplitWithShadow = false;
+            TrimInputName = true;
+    }
 
         void uC_Palette1_PaletteChanged(object sender, EventArgs e)
         {
@@ -1098,8 +1117,46 @@ namespace ImageShaper
                 {
                     CImageFile[] SHPFrames = CSHaPer.GetFrames(file, palindex);
                     DataGridViewRow row;
-                    for (int shp_i = 0; shp_i < SHPFrames.Length; shp_i++)
+                    int frameStart = 0;
+                    int frameEnd = SHPFrames.Length;
+
+                    Console.WriteLine("SplitStartFrame = " + SplitStartFrame);
+
+                    if(SplitStartFrame != SplitFrame.Begin)
                     {
+                        Console.WriteLine("in not begin : SplitStartFrame = " + SplitStartFrame);
+                        switch (SplitStartFrame)
+                        {
+                            case SplitFrame.End:
+                                frameStart = SplitWithShadow ? frameEnd / 2 - 1 : frameEnd - 1;
+                                Console.WriteLine(" frameStart = " + frameStart);
+                                break;
+                            default:
+                                frameStart = (int)SplitStartFrame;
+                                break;
+                        }
+                    }
+
+                    if (SplitEndFrame != SplitFrame.End)
+                    {
+                        switch (SplitEndFrame)
+                        {
+                            default:
+                                frameEnd = (int)SplitEndFrame;
+                                break;
+                        }
+                    }
+
+                    for (int shp_i = frameStart; shp_i < frameEnd; shp_i++)
+                    {
+                        if(SplitWithShadow)
+                        {
+                            if(shp_i >= SHPFrames.Length / 2 && shp_i - SHPFrames.Length / 2 < frameStart)
+                            {
+                                continue;
+                            }
+                        }
+
                         CImageFile SHPFrame = SHPFrames[shp_i];
                         if (setSHPBits) SHPFrame.BitFlags = bitflags;
                         if (setSHPCompression) SHPFrame.CompressionFormat = compressionformat;
@@ -1338,8 +1395,12 @@ namespace ImageShaper
                     SHPFilename = ((CImageFile)this.dataGridView_Files.Rows[r].Cells[0].Value).FileName;
                 if (SHPFilename != "") break;
             }
-            SHPFilename = Path.GetFileNameWithoutExtension(SHPFilename).TrimEnd(new char[] { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0' });
+            SHPFilename = Path.GetFileNameWithoutExtension(SHPFilename);
 
+            if (TrimInputName)
+            {
+                SHPFilename = SHPFilename.TrimEnd(new char[] { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0' });
+            }
 
             //collect the interface data into a package that can be send to the worker thread
             List<CImageJob> jobs = new List<CImageJob>();
@@ -1488,7 +1549,10 @@ namespace ImageShaper
                                     for (int r = 0; r < SplitResultCount; r++)
                                     {
                                         string SHPFilenameResult = SHPFilename + ".shp";
-                                        if (SplitResultCount > 1) SHPFilenameResult = SHPFilename + "_" + r.ToString().PadLeft(maxdigits, '0') + ".shp";
+                                        if (SplitResultCount > 1)
+                                        {
+                                            SHPFilenameResult = SHPFilename + "_" + r.ToString().PadLeft(maxdigits, '0') + ".shp";
+                                        }
 
                                         CImageResult[] SplitFrames = new CImageResult[splitFramesCount];
                                         Array.Copy(convertedframes, r * splitFramesCount, SplitFrames, 0, splitFramesCount);
@@ -2118,6 +2182,44 @@ namespace ImageShaper
                         case "yes": this.checkBox_PreventWobbleBug.Checked = true; break;
                     }
                 }
+
+                if(args[i].StartsWith("-splitstart="))
+                {
+                    Console.WriteLine("argvalue = " + argvalue);
+                    switch (argvalue)
+                    {
+                        case "end":
+                            SplitStartFrame = SplitFrame.End;
+                            Console.WriteLine("SplitStartFrame = " + SplitStartFrame);
+                            break;
+                        default:
+                            SplitStartFrame = (SplitFrame)Convert.ToInt32(argvalue);
+                            break;
+                    }
+                }
+                else if (args[i].StartsWith("-splitend="))
+                {
+                    Console.WriteLine("argvalue = " + argvalue);
+                    switch (argvalue)
+                    {
+                        case "end":
+                            SplitEndFrame = SplitFrame.End;
+                            break;
+                        default:
+                            SplitEndFrame = (SplitFrame)Convert.ToInt32(argvalue);
+                            break;
+                    }
+
+                }
+                else if (args[i].StartsWith("-splitwithshadow"))
+                {
+                    SplitWithShadow = true;
+                }
+                else if(args[i].StartsWith("-notrim"))
+                {
+                    TrimInputName = false;
+                }
+
             }
             CreatSHP(closewhenfinished);
             if (!this.IsDisposed)
