@@ -31,6 +31,7 @@ namespace ImageShaper
         private SplitFrame SplitEndFrame;
         private bool SplitWithShadow;
         private bool TrimInputName;
+        private bool SilentWhenDone;
 
         [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "ShowWindow")]
         private static extern int ShowWindow(IntPtr hWnd, uint Msg);
@@ -364,6 +365,7 @@ namespace ImageShaper
             SplitEndFrame = SplitFrame.End;
             SplitWithShadow = false;
             TrimInputName = true;
+            SilentWhenDone = false;
     }
 
         void uC_Palette1_PaletteChanged(object sender, EventArgs e)
@@ -2084,6 +2086,10 @@ namespace ImageShaper
 
         private void PlaySound()
         {
+            if (SilentWhenDone) {
+                return;
+            }
+
             string sound = "SHPfinished.wav";
 
             string soundfile = Path.Combine(GetProgramPath, sound);
@@ -2219,6 +2225,9 @@ namespace ImageShaper
                 {
                     TrimInputName = false;
                 }
+                else if (args[i].StartsWith("-silentwhendone")) {
+                    SilentWhenDone = true;
+                }
 
             }
             CreatSHP(closewhenfinished);
@@ -2228,6 +2237,15 @@ namespace ImageShaper
         private static string[] GetCommandFiles(string p)
         {
             List<string> files = new List<string>();
+
+            if (p.Contains("%")) {
+                p = p.Replace('%', ' ');
+            }
+
+            if (p.Contains(",")) {
+                return p.Split(',');
+            }
+
             string path = System.IO.Path.GetDirectoryName(p);
             string filename = System.IO.Path.GetFileName(p);
 
